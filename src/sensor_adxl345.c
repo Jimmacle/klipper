@@ -16,7 +16,7 @@ struct adxl345 {
     struct timer timer;
     uint32_t rest_ticks, stop_time;
     struct spidev_s *spi;
-    uint16_t sequence;
+    uint16_t sequence, limit_count;
     uint8_t flags, data_count;
     uint8_t data[48];
 };
@@ -91,8 +91,8 @@ adxl_stop(struct adxl345 *ax, uint8_t oid)
     spidev_transfer(ax->spi, 0, sizeof(msg), msg);
     if (ax->data_count)
         adxl_report(ax, oid);
-    sendf("adxl345_end oid=%c end_time=%u sequence=%hu"
-          , oid, end_time, ax->sequence);
+    sendf("adxl345_end oid=%c end_time=%u limit_count=%hu sequence=%hu"
+          , oid, end_time, ax->limit_count, ax->sequence);
 }
 
 // Query accelerometer data
@@ -106,6 +106,8 @@ adxl_query(struct adxl345 *ax, uint8_t oid)
     if (ax->data_count + 6 > ARRAY_SIZE(ax->data))
         adxl_report(ax, oid);
     uint_fast8_t fifo_status = msg[8] & ~0x80; // Ignore trigger bit
+    if (fifo_status >= 31 && ax->limit_count != 0xffff)
+        ax->limit_count++;
     if (fifo_status > 1 && fifo_status <= 32) {
         // More data in fifo - wake this task again
         sched_wake_task(&adxl345_wake);
@@ -135,7 +137,7 @@ command_query_adxl345(uint32_t *args)
     ax->timer.waketime = args[1];
     ax->rest_ticks = args[2];
     ax->flags = AX_HAVE_START;
-    ax->sequence = 0;
+    ax->sequence = ax->limit_count = 0;
     ax->data_count = 0;
     sched_add_timer(&ax->timer);
 }
