@@ -101,9 +101,10 @@ adxl_query(struct adxl345 *ax, uint8_t oid)
     spidev_transfer(ax->spi, 1, sizeof(msg), msg);
     memcpy(&ax->data[ax->data_count], &msg[1], 6);
     ax->data_count += 6;
-    if (ax->data_count + 6 >= ARRAY_SIZE(ax->data))
+    if (ax->data_count + 6 > ARRAY_SIZE(ax->data))
         adxl_report(ax, oid);
-    if ((msg[8] & 0x3f) > 1) {
+    uint_fast8_t fifo_status = msg[8] & ~0x80; // Ignore trigger bit
+    if (fifo_status > 1 && fifo_status <= 32) {
         // More data in fifo - wake this task again
         sched_wake_task(&adxl345_wake);
     } else {
