@@ -3,13 +3,15 @@
 # Copyright (C) 2020  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import logging
+import logging, time
 from . import bus
 
 QUERY_RATES = {
     25: 0x8, 50: 0x9, 100: 0xa, 200: 0xb, 400: 0xc,
     800: 0xd, 1600: 0xe, 3200: 0xf,
 }
+
+SCALE = 0.004 * 9.80665 # 4mg/LSB * Earth gravity
 
 REG_DEVID = 0x00
 REG_BW_RATE = 0x2C
@@ -101,18 +103,41 @@ class ADXL345:
                                                  minclock=clock)
         self.last_tx_time = print_time
         self.query_rate = 0
+        samples = self.samples
+        self.samples = []
         # Power down chip
         self.spi.spi_send([REG_POWER_CTL, 0x00])
         # Report results
         end_time = self._clock_to_print_time(params['end_time'])
-        logging.info("adxl345: start=%.6f/%.6f end=%.6f/%.6f"
-                     " limit_count=%d end_seq=%d",
-                     self.samples_start1, self.samples_start2,
-                     print_time, end_time,
-                     params['limit_count'], params['sequence'])
-        for seq, data in self.samples:
-            logging.info("adxl345 data: seq=%d data=%s", seq, repr(data))
-        self.samples = []
+        end_sequence = params['sequence']
+        total_count = (end_sequence - 1) * 8 + len(samples[-1][1]) // 6
+        start_time = self.samples_start2
+        total_time = end_time - start_time
+        sample_to_time = total_time / total_count
+        seq_to_time = sample_to_time * 8.
+        fname = "/tmp/adxl345-%s.csv" % (time.strftime("%Y%m%d_%H%M%S"),)
+        f = open(fname, "w")
+        f.write("##start=%.6f/%.6f,end=%.6f/%.6f\n"
+                % (self.samples_start1, start_time, print_time, end_time))
+        f.write("##limit_count=%d,end_seq=%d,time_per_sample=%.6f\n"
+                % (params['limit_count'], end_sequence, sample_to_time))
+        f.write("#time,x,y,z\n")
+        actual_count = 0
+        for i in range(len(samples)):
+            seq, data = samples[i]
+            d = bytearray(data)
+            count = len(data)
+            sdata = [((d[j*2] | (d[j*2+1] << 8))
+                      - ((d[j*2+1] & 0x80) << 9)) * SCALE
+                     for j in range(count//2)]
+            seq_time = start_time + seq * seq_to_time
+            for j in range(count//6):
+                f.write("%.6f,%.6f,%.6f,%.6f\n"
+                        % (seq_time + j * sample_to_time,
+                           sdata[j*3], sdata[j*3 + 1], sdata[j*3 + 2]))
+                actual_count += 1
+        f.write("##count=%d/%d,drops=%d"
+                % (total_count, actual_count, total_count - actual_count))
     cmd_ACCELEROMETER_MEASURE_help = "Start/stop accelerometer"
     def cmd_ACCELEROMETER_MEASURE(self, gcmd):
         rate = gcmd.get_int("RATE", 0)
