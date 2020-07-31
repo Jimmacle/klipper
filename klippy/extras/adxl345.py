@@ -67,6 +67,11 @@ class ADXL345:
             sequence += 0x10000
         self.last_sequence = sequence
         self.samples.append((sequence, params['data']))
+    def _convert_sequence(self, sequence):
+        sequence = (self.last_sequence & ~0xffff) | sequence
+        if sequence < self.last_sequence:
+            sequence += 0x10000
+        return sequence
     def do_start(self, rate):
         # Verify chip connectivity
         params = self.spi.spi_transfer([REG_DEVID | REG_MOD_READ, 0x00])
@@ -109,7 +114,7 @@ class ADXL345:
         self.spi.spi_send([REG_POWER_CTL, 0x00])
         # Report results
         end_time = self._clock_to_print_time(params['end_time'])
-        end_sequence = params['sequence']
+        end_sequence = self._convert_sequence(params['sequence'])
         total_count = (end_sequence - 1) * 8 + len(samples[-1][1]) // 6
         start_time = self.samples_start2
         total_time = end_time - start_time
