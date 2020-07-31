@@ -51,7 +51,7 @@ class ADXL345:
             cq=self.spi.get_command_queue())
         self.query_adxl345_end_cmd = self.mcu.lookup_query_command(
             "query_adxl345 oid=%c clock=%u rest_ticks=%u",
-            "adxl345_end oid=%c sequence=%hu", oid=self.oid,
+            "adxl345_end oid=%c end_time=%u sequence=%hu", oid=self.oid,
             cq=self.spi.get_command_queue())
     def _clock_to_print_time(self, clock):
         return self.mcu.clock_to_print_time(self.mcu.clock32_to_clock64(clock))
@@ -104,9 +104,10 @@ class ADXL345:
         # Power down chip
         self.spi.spi_send([REG_POWER_CTL, 0x00])
         # Report results
-        logging.info("adxl345: start=%.6f/%.6f end=%.6f end_seq=%d",
+        end_time = self._clock_to_print_time(params['end_time'])
+        logging.info("adxl345: start=%.6f/%.6f end=%.6f/%.6f end_seq=%d",
                      self.samples_start1, self.samples_start2,
-                     print_time, params['sequence'])
+                     print_time, end_time, params['sequence'])
         for seq, data in self.samples:
             logging.info("adxl345 data: seq=%d data=%s", seq, repr(data))
         self.samples = []

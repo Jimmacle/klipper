@@ -84,13 +84,15 @@ adxl_start(struct adxl345 *ax, uint8_t oid)
 static void
 adxl_stop(struct adxl345 *ax, uint8_t oid)
 {
+    uint32_t end_time = timer_read_time();
     sched_del_timer(&ax->timer);
     ax->flags = 0;
     uint8_t msg[2] = { AR_FIFO_CTL, 0x00 };
     spidev_transfer(ax->spi, 0, sizeof(msg), msg);
     if (ax->data_count)
         adxl_report(ax, oid);
-    sendf("adxl345_end oid=%c sequence=%hu", oid, ax->sequence);
+    sendf("adxl345_end oid=%c end_time=%u sequence=%hu"
+          , oid, end_time, ax->sequence);
 }
 
 // Query accelerometer data
