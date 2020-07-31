@@ -138,6 +138,7 @@ class ADXL345:
                 actual_count += 1
         f.write("##count=%d/%d,drops=%d"
                 % (total_count, actual_count, total_count - actual_count))
+        f.close()
     cmd_ACCELEROMETER_MEASURE_help = "Start/stop accelerometer"
     def cmd_ACCELEROMETER_MEASURE(self, gcmd):
         rate = gcmd.get_int("RATE", 0)
